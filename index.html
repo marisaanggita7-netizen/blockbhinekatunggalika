@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BLOCK BLAST - Bhinneka Tunggal Ika</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Tone.js for Sound Effects and Music -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Canvas Confetti for winning effect -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #1e293b; /* Dark Slate */
+            color: white;
+            user-select: none;
+            overflow: hidden; /* Prevent scrolling during gameplay */
+        }
+
+        /* Custom Scrollbar for smaller screens */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #334155; }
+        ::-webkit-scrollbar-thumb { background: #64748b; border-radius: 4px; }
+
+        /* Grid Animations */
+        .cell {
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+        .cell-hover-valid { opacity: 0.7; transform: scale(0.9); }
+        .cell-hover-invalid { background-color: #ef4444 !important; opacity: 0.5; }
+        .cell-clearing { animation: popOut 0.4s forwards; }
+
+        @keyframes popOut {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            80% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop-in { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        /* Player Themes */
+        .theme-p1 {
+            background: linear-gradient(135deg, #f59e0b, #ea580c);
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+        }
+        .theme-p2 {
+            background: linear-gradient(135deg, #10b981, #0d9488);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+        }
+        
+        .bg-p1-dark { background-color: #78350f; border: 2px solid #b45309; }
+        .bg-p2-dark { background-color: #064e3b; border: 2px solid #047857; }
+
+        .shape-block {
+            display: inline-block;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .shape-block:hover { transform: scale(1.1); }
+        .shape-block.selected { transform: scale(1.15); filter: brightness(1.2); }
+        
+        .shape-cell {
+            width: 25px;
+            height: 25px;
+            margin: 1px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        @media (min-width: 1024px) {
+            .shape-cell { width: 35px; height: 35px; margin: 2px; border-radius: 6px; }
+        }
+
+        .board-cell {
+            width: 100%;
+            padding-bottom: 100%; /* Aspect ratio 1:1 */
+            border-radius: 4px;
+            position: relative;
+        }
+        .board-cell > div {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 4px;
+        }
+
+        /* Glassmorphism modals */
+        .glass-modal {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .inactive-player { opacity: 0.4; pointer-events: none; filter: grayscale(50%); }
+    </style>
+</head>
+<body class="flex flex-col h-screen w-screen overflow-hidden text-sm sm:text-base">
+
+    <!-- START SCREEN -->
+    <div id="start-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-900 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
+        <div class="text-center animate-pop-in max-w-2xl px-4">
+            <h1 class="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-red-500 to-pink-500 drop-shadow-lg mb-2">BLOCK BLAST</h1>
+            <h2 class="text-2xl md:text-3xl font-bold text-white mb-8 bg-blue-600 inline-block px-6 py-2 rounded-full border-4 border-white shadow-xl">PPKn: Bhinneka Tunggal Ika</h2>
+            
+            <div class="flex justify-center gap-6 mb-10">
+                <div class="w-32 h-32 bg-yellow-400 rounded-2xl border-4 border-white shadow-lg flex items-center justify-center transform -rotate-6">
+                    <i class="fas fa-child text-6xl text-orange-700"></i>
+                </div>
+                <div class="w-32 h-32 bg-teal-400 rounded-2xl border-4 border-white shadow-lg flex items-center justify-center transform rotate-6">
+                    <i class="fas fa-child-reaching text-6xl text-teal-900"></i>
+                </div>
+            </div>
+
+            <div class="space-y-4 flex flex-col items-center">
+                <button onclick="startGame()" class="w-64 py-4 text-2xl font-bold text-white bg-gradient-to-r from-green-400 to-blue-500 rounded-full hover:scale-105 transition shadow-[0_10px_0_#047857] hover:shadow-[0_5px_0_#047857] hover:translate-y-1 active:translate-y-2 active:shadow-none">
+                    <i class="fas fa-play mr-2"></i> START GAME
+                </button>
+                <div class="flex gap-4">
+                    <button onclick="document.getElementById('guide-modal').classList.remove('hidden')" class="px-6 py-3 bg-slate-700 rounded-full font-bold hover:bg-slate-600 transition">
+                        <i class="fas fa-book mr-2"></i> Panduan
+                    </button>
+                    <button id="toggle-music-btn" onclick="toggleMusic()" class="px-6 py-3 bg-slate-700 rounded-full font-bold hover:bg-slate-600 transition">
+                        <i class="fas fa-music mr-2"></i> Musik ON
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GUIDE MODAL -->
+    <div id="guide-modal" class="hidden absolute inset-0 z-50 glass-modal flex justify-center items-center p-4">
+        <div class="bg-white text-slate-800 rounded-2xl max-w-xl w-full p-6 sm:p-8 animate-pop-in relative">
+            <button onclick="document.getElementById('guide-modal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-500 hover:text-red-500 text-2xl">
+                <i class="fas fa-times-circle"></i>
+            </button>
+            <h2 class="text-3xl font-black mb-4 text-center text-blue-600">CARA BERMAIN</h2>
+            <ul class="space-y-3 text-lg font-semibold">
+                <li><i class="fas fa-user-friends text-blue-500 w-6"></i> Game untuk 2 pemain bergiliran.</li>
+                <li><i class="fas fa-cubes text-orange-500 w-6"></i> Pilih dan letakkan balok di papan grid (8x8).</li>
+                <li><i class="fas fa-bomb text-red-500 w-6"></i> Penuhi 1 baris atau kolom penuh untuk menghancurkannya.</li>
+                <li><i class="fas fa-question-circle text-purple-500 w-6"></i> Jika berhasil menghancurkan balok, kamu harus menjawab soal PPKn!</li>
+                <li><i class="fas fa-star text-yellow-500 w-6"></i> Jawaban benar = +10 Poin.</li>
+                <li><i class="fas fa-trophy text-green-500 w-6"></i> Pemain dengan skor tertinggi setelah 10 soal selesai adalah Pemenangnya!</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- MAIN GAME UI -->
+    <div id="game-ui" class="hidden flex-col h-full w-full">
+        <!-- Top Bar -->
+        <div class="h-16 bg-slate-800 flex justify-between items-center px-4 sm:px-8 border-b-4 border-slate-700 shadow-md shrink-0">
+            <div class="flex items-center gap-4">
+                <div class="bg-slate-700 px-4 py-1 rounded-full font-bold text-white border-2 border-slate-600">
+                    Soal Selesai: <span id="questions-count" class="text-yellow-400 text-lg">0/10</span>
+                </div>
+            </div>
+            <div class="text-xl sm:text-2xl font-black text-center flex-1" id="turn-indicator">
+                GILIRAN: PLAYER 1
+            </div>
+            <div class="flex gap-2 sm:gap-4">
+                <button onclick="toggleMusic()" class="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center hover:bg-slate-600 transition">
+                    <i id="game-music-icon" class="fas fa-music"></i>
+                </button>
+                <button onclick="toggleFullscreen()" class="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center hover:bg-slate-600 transition">
+                    <i class="fas fa-expand"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Area -->
+        <div class="flex-1 flex flex-row overflow-hidden bg-slate-900">
+            
+            <!-- PLAYER 1 AREA -->
+            <div id="p1-container" class="w-1/2 flex flex-col items-center justify-center p-2 sm:p-4 border-r-4 border-slate-800 relative transition-all duration-300">
+                <!-- Score & Profile -->
+                <div class="w-full flex items-center justify-between mb-2 sm:mb-4 bg-orange-500 rounded-xl p-2 sm:p-4 shadow-lg border-2 border-orange-300">
+                    <div class="flex items-center gap-2">
+                        <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center text-orange-600 text-xl"><i class="fas fa-child"></i></div>
+                        <h2 class="font-black text-lg sm:text-xl md:text-2xl text-white shadow-sm">PLAYER 1</h2>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs font-bold text-orange-200">SKOR</div>
+                        <div class="text-2xl sm:text-4xl font-black text-white" id="p1-score">0</div>
+                    </div>
+                </div>
+                <!-- Board -->
+                <div class="w-full max-w-sm aspect-square bg-p1-dark rounded-lg p-1 sm:p-2 grid grid-cols-8 grid-rows-8 gap-1 sm:gap-1" id="p1-board">
+                    <!-- JS populated -->
+                </div>
+                <!-- Shapes -->
+                <div class="h-24 sm:h-32 w-full mt-2 sm:mt-4 flex justify-center items-center gap-2 sm:gap-6 bg-slate-800 rounded-xl p-2" id="p1-shapes">
+                    <!-- JS populated -->
+                </div>
+            </div>
+
+            <!-- PLAYER 2 AREA -->
+            <div id="p2-container" class="w-1/2 flex flex-col items-center justify-center p-2 sm:p-4 relative transition-all duration-300 inactive-player">
+                <!-- Score & Profile -->
+                <div class="w-full flex items-center justify-between mb-2 sm:mb-4 bg-teal-500 rounded-xl p-2 sm:p-4 shadow-lg border-2 border-teal-300">
+                    <div class="flex items-center gap-2">
+                        <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center text-teal-600 text-xl"><i class="fas fa-child-reaching"></i></div>
+                        <h2 class="font-black text-lg sm:text-xl md:text-2xl text-white shadow-sm">PLAYER 2</h2>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs font-bold text-teal-200">SKOR</div>
+                        <div class="text-2xl sm:text-4xl font-black text-white" id="p2-score">0</div>
+                    </div>
+                </div>
+                <!-- Board -->
+                <div class="w-full max-w-sm aspect-square bg-p2-dark rounded-lg p-1 sm:p-2 grid grid-cols-8 grid-rows-8 gap-1 sm:gap-1" id="p2-board">
+                    <!-- JS populated -->
+                </div>
+                <!-- Shapes -->
+                <div class="h-24 sm:h-32 w-full mt-2 sm:mt-4 flex justify-center items-center gap-2 sm:gap-6 bg-slate-800 rounded-xl p-2" id="p2-shapes">
+                    <!-- JS populated -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- QUIZ MODAL -->
+    <div id="quiz-modal" class="hidden absolute inset-0 z-50 glass-modal flex justify-center items-center p-4">
+        <div class="bg-white rounded-3xl max-w-3xl w-full border-8 border-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.5)] overflow-hidden flex flex-col">
+            <div class="bg-yellow-400 text-slate-800 text-center py-4 relative">
+                <i class="fas fa-lightbulb text-4xl mb-2 text-orange-600"></i>
+                <h2 class="text-3xl font-black">KUIS PPKn</h2>
+                <div class="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full font-bold animate-pulse">
+                    Wajib Dijawab!
+                </div>
+            </div>
+            <div class="p-6 sm:p-10 text-slate-800 flex-1 flex flex-col justify-center">
+                <p id="quiz-question" class="text-xl sm:text-2xl font-bold mb-8 text-center text-slate-700"></p>
+                <div id="quiz-options" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Options generated via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FEEDBACK MODAL (Correct/Wrong) -->
+    <div id="feedback-modal" class="hidden absolute inset-0 z-[60] flex justify-center items-center p-4 bg-slate-900/80">
+        <div id="feedback-content" class="bg-white rounded-3xl p-8 max-w-md w-full text-center animate-pop-in">
+            <!-- JS populated -->
+        </div>
+    </div>
+
+    <!-- GAME OVER MODAL -->
+    <div id="game-over-modal" class="hidden absolute inset-0 z-[70] glass-modal flex justify-center items-center p-4">
+        <div class="bg-slate-800 rounded-3xl max-w-2xl w-full border-4 border-slate-600 shadow-2xl p-8 text-center animate-pop-in">
+            <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-2">PERMAINAN SELESAI!</h1>
+            <p class="text-xl text-slate-300 mb-8">Hasil Belajar PPKn Hari Ini</p>
+            
+            <div class="flex justify-center items-center gap-8 mb-8">
+                <!-- P1 Result -->
+                <div id="result-p1" class="flex-1 bg-orange-500 rounded-2xl p-6 border-4 border-orange-400 shadow-lg transform transition-transform">
+                    <i class="fas fa-child text-5xl text-white mb-2"></i>
+                    <h2 class="text-2xl font-bold text-white mb-2">PLAYER 1</h2>
+                    <div class="text-5xl font-black text-yellow-200" id="final-score-1">0</div>
+                </div>
+                
+                <div class="text-4xl font-black text-slate-400">VS</div>
+
+                <!-- P2 Result -->
+                <div id="result-p2" class="flex-1 bg-teal-500 rounded-2xl p-6 border-4 border-teal-400 shadow-lg transform transition-transform">
+                    <i class="fas fa-child-reaching text-5xl text-white mb-2"></i>
+                    <h2 class="text-2xl font-bold text-white mb-2">PLAYER 2</h2>
+                    <div class="text-5xl font-black text-teal-200" id="final-score-2">0</div>
+                </div>
+            </div>
+
+            <div id="winner-announcement" class="text-3xl font-black mb-8 bg-blue-600 inline-block px-8 py-3 rounded-full border-4 border-white shadow-lg animate-bounce">
+                <!-- JS populated -->
+            </div>
+
+            <div class="flex justify-center gap-4">
+                <button onclick="location.reload()" class="px-8 py-4 bg-slate-600 rounded-full font-bold text-xl hover:bg-slate-500 transition border-2 border-slate-500 shadow-lg text-white">
+                    <i class="fas fa-home mr-2"></i> Menu Utama
+                </button>
+                <button onclick="startGame()" class="px-8 py-4 bg-green-500 rounded-full font-bold text-xl hover:bg-green-400 transition border-2 border-green-400 shadow-lg text-white">
+                    <i class="fas fa-redo mr-2"></i> Main Lagi
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- 1. QUESTION BANK (10 Soal PPKn Kelas 4 - Bhinneka Tunggal Ika) ---
+        const originalQuestionBank = [
+            {
+                q: "Semboyan persatuan bangsa Indonesia adalah...",
+                opts: ["Bhinneka Tunggal Ika", "Pancasila", "UUD 1945", "Tut Wuri Handayani"],
+                ans: "Bhinneka Tunggal Ika"
+            },
+            {
+                q: "Kata 'Bhinneka' pada semboyan negara kita memiliki arti...",
+                opts: ["Berbeda-beda", "Satu", "Itu", "Sama"],
+                ans: "Berbeda-beda"
+            },
+            {
+                q: "Kata 'Tunggal' pada semboyan negara kita memiliki arti...",
+                opts: ["Satu", "Banyak", "Berbeda", "Bersama"],
+                ans: "Satu"
+            },
+            {
+                q: "Kata 'Ika' pada semboyan negara kita memiliki arti...",
+                opts: ["Itu", "Ini", "Satu", "Sama"],
+                ans: "Itu"
+            },
+            {
+                q: "Semboyan Bhinneka Tunggal Ika diambil dari sebuah kitab peninggalan kerajaan Majapahit, yaitu kitab...",
+                opts: ["Sutasoma", "Negarakertagama", "Arjuna Wiwaha", "Ramayana"],
+                ans: "Sutasoma"
+            },
+            {
+                q: "Kitab Sutasoma yang memuat kata Bhinneka Tunggal Ika dikarang oleh...",
+                opts: ["Mpu Tantular", "Mpu Prapanca", "Mpu Sedah", "Gajah Mada"],
+                ans: "Mpu Tantular"
+            },
+            {
+                q: "Pada lambang negara Garuda Pancasila, tulisan Bhinneka Tunggal Ika terletak pada bagian...",
+                opts: ["Pita yang dicengkeram kaki", "Dada burung Garuda", "Sayap burung Garuda", "Ekor burung Garuda"],
+                ans: "Pita yang dicengkeram kaki"
+            },
+            {
+                q: "Berikut ini adalah contoh keberagaman budaya di Indonesia, KECUALI...",
+                opts: ["Warna baju seragam sekolah", "Tarian daerah", "Rumah adat", "Bahasa daerah"],
+                ans: "Warna baju seragam sekolah"
+            },
+            {
+                q: "Cara menghargai teman yang berbeda agama saat mereka sedang beribadah adalah...",
+                opts: ["Menjaga ketenangan agar ibadahnya khusyuk", "Mengajaknya bermain dengan suara keras", "Melarangnya beribadah", "Mengejek ibadahnya"],
+                ans: "Menjaga ketenangan agar ibadahnya khusyuk"
+            },
+            {
+                q: "Perilaku yang TIDAK SESUAI dengan makna Bhinneka Tunggal Ika adalah...",
+                opts: ["Hanya mau berteman dengan teman satu suku", "Menghormati teman yang berbeda agama", "Mempelajari tarian dari daerah lain", "Membantu tetangga yang tertimpa musibah"],
+                ans: "Hanya mau berteman dengan teman satu suku"
+            }
+        ];
+
+        // --- 2. SHAPE DEFINITIONS ---
+        // 1=solid, 0=empty. Max grid typically 3x3 for bounding box.
+        const SHAPES_LIB = [
+            [[1]], // 1x1 Dot
+            [[1,1]], // 2x1 H
+            [[1],[1]], // 1x2 V
+            [[1,1,1]], // 3x1 H
+            [[1],[1],[1]], // 1x3 V
+            [[1,1],[1,1]], // 2x2 Square
+            [[1,0],[1,1]], // L Small (Bottom Left)
+            [[1,1],[1,0]], // L Small (Top Left)
+            [[1,1],[0,1]], // L Small (Top Right)
+            [[0,1],[1,1]], // L Small (Bottom Right)
+            [[1,1,1],[0,0,1],[0,0,1]], // L Large (Corner Top Left)
+            [[1,1,1],[0,1,0]], // T shape
+            [[1,1,1,1]] // 4x1 H
+        ];
+
+        // --- 3. GAME STATE ---
+        let p1Board = Array(8).fill().map(() => Array(8).fill(0));
+        let p2Board = Array(8).fill().map(() => Array(8).fill(0));
+        let p1Score = 0;
+        let p2Score = 0;
+        let currentPlayer = 1; // 1 or 2
+        let p1Shapes = [];
+        let p2Shapes = [];
+        let selectedShape = null; // { player, shapeMatrix, index }
+        let questionsRemaining = [];
+        let questionsAnsweredCount = 0;
+        let isMusicPlaying = false;
+        
+        // Colors mapping
+        const P1_COLOR = "bg-orange-500";
+        const P2_COLOR = "bg-teal-500";
+
+        // --- 4. AUDIO SETUP (Tone.js) ---
+        let synth, bgmLoop;
+        
+        function initAudio() {
+            if(synth) return;
+            try {
+                // Main Synth
+                synth = new Tone.PolySynth(Tone.Synth).toDestination();
+                synth.volume.value = -10;
+                
+                // Simple BGM Arpeggio
+                const notes = ["C4", "E4", "G4", "A4", "G4", "E4"];
+                let idx = 0;
+                bgmLoop = new Tone.Loop(time => {
+                    synth.triggerAttackRelease(notes[idx], "8n", time);
+                    idx = (idx + 1) % notes.length;
+                }, "4n");
+                
+                Tone.Transport.bpm.value = 120;
+            } catch(e) { console.error("Audio init error", e); }
+        }
+
+        function playSound(type) {
+            if(!synth || !isMusicPlaying) return;
+            const now = Tone.now();
+            switch(type) {
+                case 'place':
+                    synth.triggerAttackRelease(["C5", "E5"], "16n", now);
+                    break;
+                case 'clear':
+                    synth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "8n", now);
+                    break;
+                case 'wrong':
+                    synth.triggerAttackRelease("C3", "4n", now);
+                    break;
+                case 'correct':
+                    synth.triggerAttackRelease(["G4", "B4", "D5", "G5"], "4n", now);
+                    break;
+                case 'win':
+                    synth.triggerAttackRelease(["C4", "E4", "G4", "C5"], "2n", now);
+                    break;
+            }
+        }
+
+        function toggleMusic() {
+            initAudio();
+            if(Tone.context.state !== 'running') Tone.context.resume();
+            
+            isMusicPlaying = !isMusicPlaying;
+            const btn1 = document.getElementById('toggle-music-btn');
+            const btn2 = document.getElementById('game-music-icon');
+            
+            if(isMusicPlaying) {
+                Tone.Transport.start();
+                bgmLoop.start(0);
+                if(btn1) btn1.innerHTML = '<i class="fas fa-music mr-2"></i> Musik ON';
+                if(btn2) btn2.className = 'fas fa-music';
+            } else {
+                Tone.Transport.stop();
+                bgmLoop.stop();
+                if(btn1) btn1.innerHTML = '<i class="fas fa-volume-mute mr-2"></i> Musik OFF';
+                if(btn2) btn2.className = 'fas fa-volume-mute text-red-400';
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.log(err));
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        // --- 5. CORE GAME FUNCTIONS ---
+
+        function startGame() {
+            initAudio();
+            if(Tone.context.state !== 'running') Tone.context.resume();
+            
+            // Reset Data
+            p1Board = Array(8).fill().map(() => Array(8).fill(0));
+            p2Board = Array(8).fill().map(() => Array(8).fill(0));
+            p1Score = 0;
+            p2Score = 0;
+            currentPlayer = 1;
+            questionsAnsweredCount = 0;
+            selectedShape = null;
+            
+            // Setup Questions (Shuffle copy of bank)
+            questionsRemaining = [...originalQuestionBank].sort(() => Math.random() - 0.5);
+
+            // Hide/Show Screens
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-modal').classList.add('hidden');
+            document.getElementById('game-ui').classList.remove('hidden');
+            document.getElementById('game-ui').classList.add('flex');
+
+            // Initial UI Setup
+            updateScoreUI();
+            updateQuestionsUI();
+            
+            p1Shapes = get3RandomShapes();
+            p2Shapes = get3RandomShapes();
+            
+            renderBoard(1);
+            renderBoard(2);
+            renderShapes(1);
+            renderShapes(2);
+            updateTurnUI();
+        }
+
+        function get3RandomShapes() {
+            return [1, 2, 3].map(() => SHAPES_LIB[Math.floor(Math.random() * SHAPES_LIB.length)]);
+        }
+
+        function renderBoard(player) {
+            const board = player === 1 ? p1Board : p2Board;
+            const container = document.getElementById(`p${player}-board`);
+            const colorClass = player === 1 ? P1_COLOR : P2_COLOR;
+            container.innerHTML = '';
+            
+            for(let r=0; r<8; r++) {
+                for(let c=0; c<8; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'board-cell cell';
+                    const inner = document.createElement('div');
+                    
+                    if(board[r][c] === 1) {
+                        inner.className = `${colorClass} shadow-inner border border-white/20`;
+                    } else {
+                        inner.className = 'bg-slate-800 border border-slate-700/50';
+                    }
+                    
+                    inner.id = `cell-p${player}-${r}-${c}`;
+                    
+                    // Interaction listeners
+                    cell.onclick = () => attemptPlace(player, r, c);
+                    cell.onmouseenter = () => previewShape(player, r, c);
+                    cell.onmouseleave = () => clearPreview(player);
+                    
+                    cell.appendChild(inner);
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function renderShapes(player) {
+            const shapesArray = player === 1 ? p1Shapes : p2Shapes;
+            const container = document.getElementById(`p${player}-shapes`);
+            const colorClass = player === 1 ? P1_COLOR : P2_COLOR;
+            container.innerHTML = '';
+            
+            shapesArray.forEach((shape, index) => {
+                if(shape === null) {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'w-16 h-16'; // empty slot
+                    container.appendChild(placeholder);
+                    return;
+                }
+
+                const shapeDiv = document.createElement('div');
+                shapeDiv.className = `shape-block flex flex-col items-center justify-center p-2 rounded-lg`;
+                shapeDiv.id = `shape-p${player}-${index}`;
+                
+                // Draw matrix
+                shape.forEach(row => {
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = 'flex';
+                    row.forEach(val => {
+                        const cell = document.createElement('div');
+                        cell.className = `shape-cell ${val ? colorClass + ' shadow-sm' : 'opacity-0'}`;
+                        rowDiv.appendChild(cell);
+                    });
+                    shapeDiv.appendChild(rowDiv);
+                });
+
+                shapeDiv.onclick = () => selectShape(player, shape, index);
+                container.appendChild(shapeDiv);
+            });
+        }
+
+        function selectShape(player, shapeMatrix, index) {
+            if(player !== currentPlayer) return;
+            
+            // Clear previous selection visually
+            if(selectedShape) {
+                const prev = document.getElementById(`shape-p${selectedShape.player}-${selectedShape.index}`);
+                if(prev) prev.classList.remove('selected', 'bg-white/20');
+            }
+
+            // Unselect if clicking same
+            if(selectedShape && selectedShape.player === player && selectedShape.index === index) {
+                selectedShape = null;
+                return;
+            }
+
+            // Select new
+            selectedShape = { player, shapeMatrix, index };
+            const curr = document.getElementById(`shape-p${player}-${index}`);
+            if(curr) curr.classList.add('selected', 'bg-white/20');
+        }
+
+        function canPlace(board, shape, row, col) {
+            for(let r=0; r<shape.length; r++) {
+                for(let c=0; c<shape[0].length; c++) {
+                    if(shape[r][c] === 1) {
+                        if(row + r >= 8 || col + c >= 8) return false; // out of bounds
+                        if(board[row + r][col + c] === 1) return false; // overlap
+                    }
+                }
+            }
+            return true;
+        }
+
+        function previewShape(player, row, col) {
+            if(!selectedShape || selectedShape.player !== player || player !== currentPlayer) return;
+            clearPreview(player); // Clear existing previews
+            
+            const shape = selectedShape.shapeMatrix;
+            const isValid = canPlace(player === 1 ? p1Board : p2Board, shape, row, col);
+            const colorClass = player === 1 ? P1_COLOR : P2_COLOR;
+
+            for(let r=0; r<shape.length; r++) {
+                for(let c=0; c<shape[0].length; c++) {
+                    if(shape[r][c] === 1) {
+                        const targetR = row + r;
+                        const targetC = col + c;
+                        if(targetR < 8 && targetC < 8) {
+                            const cell = document.getElementById(`cell-p${player}-${targetR}-${targetC}`);
+                            if(cell) {
+                                if(isValid) {
+                                    cell.className = `${colorClass} shadow-inner border border-white/20 opacity-50 cell-hover-valid`;
+                                } else {
+                                    cell.classList.add('cell-hover-invalid');
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function clearPreview(player) {
+            const board = player === 1 ? p1Board : p2Board;
+            const colorClass = player === 1 ? P1_COLOR : P2_COLOR;
+            for(let r=0; r<8; r++) {
+                for(let c=0; c<8; c++) {
+                    const cell = document.getElementById(`cell-p${player}-${r}-${c}`);
+                    if(cell) {
+                        if(board[r][c] === 1) {
+                            cell.className = `${colorClass} shadow-inner border border-white/20`;
+                        } else {
+                            cell.className = 'bg-slate-800 border border-slate-700/50';
+                        }
+                    }
+                }
+            }
+        }
+
+        function attemptPlace(player, row, col) {
+            if(!selectedShape || selectedShape.player !== player || player !== currentPlayer) return;
+            
+            const board = player === 1 ? p1Board : p2Board;
+            const shape = selectedShape.shapeMatrix;
+            
+            if(canPlace(board, shape, row, col)) {
+                // Place block
+                for(let r=0; r<shape.length; r++) {
+                    for(let c=0; c<shape[0].length; c++) {
+                        if(shape[r][c] === 1) {
+                            board[row + r][col + c] = 1;
+                        }
+                    }
+                }
+                
+                playSound('place');
+
+                // Remove shape from tray
+                if(player === 1) p1Shapes[selectedShape.index] = null;
+                else p2Shapes[selectedShape.index] = null;
+                
+                selectedShape = null;
+                renderBoard(player);
+                renderShapes(player);
+                
+                // Check Refill
+                checkRefill(player);
+
+                // Check Line Clears
+                const linesCleared = checkAndClearLines(player);
+                
+                if(linesCleared > 0) {
+                    setTimeout(() => {
+                        triggerQuiz(player);
+                    }, 500); // Wait for clear animation
+                } else {
+                    switchTurn();
+                }
+            }
+        }
+
+        function checkRefill(player) {
+            const shapes = player === 1 ? p1Shapes : p2Shapes;
+            if(shapes.every(s => s === null)) {
+                if(player === 1) p1Shapes = get3RandomShapes();
+                else p2Shapes = get3RandomShapes();
+                renderShapes(player);
+            }
+        }
+
+        function checkAndClearLines(player) {
+            const board = player === 1 ? p1Board : p2Board;
+            let rowsToClear = [];
+            let colsToClear = [];
+            
+            // Check rows
+            for(let r=0; r<8; r++) {
+                if(board[r].every(val => val === 1)) rowsToClear.push(r);
+            }
+            // Check cols
+            for(let c=0; c<8; c++) {
+                let isFull = true;
+                for(let r=0; r<8; r++) {
+                    if(board[r][c] === 0) { isFull = false; break; }
+                }
+                if(isFull) colsToClear.push(c);
+            }
+
+            const totalLines = rowsToClear.length + colsToClear.length;
+
+            if(totalLines > 0) {
+                playSound('clear');
+                // Animate clearing
+                const colorClass = player === 1 ? P1_COLOR : P2_COLOR;
+                
+                // Mark for clear
+                rowsToClear.forEach(r => {
+                    for(let c=0; c<8; c++) {
+                        const cell = document.getElementById(`cell-p${player}-${r}-${c}`);
+                        if(cell) cell.classList.add('cell-clearing');
+                        board[r][c] = 0; // update data immediately
+                    }
+                });
+                colsToClear.forEach(c => {
+                    for(let r=0; r<8; r++) {
+                        const cell = document.getElementById(`cell-p${player}-${r}-${c}`);
+                        if(cell) cell.classList.add('cell-clearing');
+                        board[r][c] = 0;
+                    }
+                });
+
+                // Re-render after animation
+                setTimeout(() => { renderBoard(player); }, 400);
+            }
+            
+            return totalLines;
+        }
+
+        function hasValidMove(player) {
+            const board = player === 1 ? p1Board : p2Board;
+            const shapes = player === 1 ? p1Shapes : p2Shapes;
+            
+            for(let i=0; i<shapes.length; i++) {
+                const shape = shapes[i];
+                if(shape === null) continue;
+                // Test all cells
+                for(let r=0; r<8; r++) {
+                    for(let c=0; c<8; c++) {
+                        if(canPlace(board, shape, r, c)) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function switchTurn() {
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            selectedShape = null; // Clear selection
+            
+            // Check if next player has valid move
+            if(!hasValidMove(currentPlayer)) {
+                // Give them new shapes to avoid getting stuck (kid-friendly rule)
+                if(currentPlayer === 1) p1Shapes = get3RandomShapes();
+                else p2Shapes = get3RandomShapes();
+                renderShapes(currentPlayer);
+                
+                // If STILL no valid move, clear board as penalty/help
+                if(!hasValidMove(currentPlayer)) {
+                    if(currentPlayer === 1) p1Board = Array(8).fill().map(() => Array(8).fill(0));
+                    else p2Board = Array(8).fill().map(() => Array(8).fill(0));
+                    renderBoard(currentPlayer);
+                    showFeedback(currentPlayer, false, "TIDAK ADA JALAN! Papan di-reset.");
+                }
+            }
+            
+            updateTurnUI();
+        }
+
+        function updateTurnUI() {
+            const ind = document.getElementById('turn-indicator');
+            const p1Area = document.getElementById('p1-container');
+            const p2Area = document.getElementById('p2-container');
+            
+            if(currentPlayer === 1) {
+                ind.innerHTML = '<span class="text-orange-400"><i class="fas fa-arrow-left"></i> GILIRAN: PLAYER 1</span>';
+                p1Area.classList.remove('inactive-player');
+                p2Area.classList.add('inactive-player');
+                renderShapes(1); // Refresh highlight states
+                renderShapes(2);
+            } else {
+                ind.innerHTML = '<span class="text-teal-400">GILIRAN: PLAYER 2 <i class="fas fa-arrow-right"></i></span>';
+                p2Area.classList.remove('inactive-player');
+                p1Area.classList.add('inactive-player');
+                renderShapes(1);
+                renderShapes(2);
+            }
+        }
+
+        function updateScoreUI() {
+            document.getElementById('p1-score').innerText = p1Score;
+            document.getElementById('p2-score').innerText = p2Score;
+        }
+
+        function updateQuestionsUI() {
+            document.getElementById('questions-count').innerText = `${questionsAnsweredCount}/10`;
+        }
+
+        // --- 6. QUIZ LOGIC ---
+        
+        let currentQuestion = null;
+        let quizPlayer = null;
+
+        function triggerQuiz(player) {
+            if(questionsRemaining.length === 0) {
+                // Failsafe, shouldn't happen if we cap at 10
+                endGame();
+                return;
+            }
+            
+            quizPlayer = player;
+            currentQuestion = questionsRemaining.pop();
+            
+            // Shuffle options
+            let options = [...currentQuestion.opts].sort(() => Math.random() - 0.5);
+
+            document.getElementById('quiz-question').innerText = currentQuestion.q;
+            
+            const optsContainer = document.getElementById('quiz-options');
+            optsContainer.innerHTML = '';
+            
+            const colorClass = player === 1 ? 'hover:bg-orange-100 hover:border-orange-400 text-orange-900' : 'hover:bg-teal-100 hover:border-teal-400 text-teal-900';
+
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = `w-full text-left p-4 rounded-xl border-2 border-slate-200 bg-slate-50 font-bold text-lg transition-all transform hover:scale-105 ${colorClass}`;
+                btn.innerText = opt;
+                btn.onclick = () => handleAnswer(opt === currentQuestion.ans, opt);
+                optsContainer.appendChild(btn);
+            });
+
+            document.getElementById('quiz-modal').classList.remove('hidden');
+        }
+
+        function handleAnswer(isCorrect, selectedAns) {
+            document.getElementById('quiz-modal').classList.add('hidden');
+            
+            if(isCorrect) {
+                playSound('correct');
+                if(quizPlayer === 1) p1Score += 10;
+                else p2Score += 10;
+                updateScoreUI();
+                showFeedback(quizPlayer, true, "+10 POIN!<br><span class='text-lg'>Jawaban Benar!</span>");
+            } else {
+                playSound('wrong');
+                showFeedback(quizPlayer, false, `SALAH!<br><span class='text-base font-normal'>Jawaban yang benar: <b>${currentQuestion.ans}</b></span>`);
+            }
+
+            questionsAnsweredCount++;
+            updateQuestionsUI();
+
+            setTimeout(() => {
+                if(questionsAnsweredCount >= 10) {
+                    endGame();
+                } else {
+                    switchTurn();
+                }
+            }, 3000); // 3 seconds to read feedback
+        }
+
+        function showFeedback(player, isCorrect, htmlMsg) {
+            const modal = document.getElementById('feedback-modal');
+            const content = document.getElementById('feedback-content');
+            
+            modal.classList.remove('hidden');
+            
+            const colorClass = isCorrect ? 'text-green-500' : 'text-red-500';
+            const icon = isCorrect ? 'fa-check-circle' : 'fa-times-circle';
+            const borderClass = isCorrect ? 'border-green-400 shadow-[0_0_30px_rgba(74,222,128,0.5)]' : 'border-red-400 shadow-[0_0_30px_rgba(248,113,113,0.5)]';
+
+            content.className = `bg-white rounded-3xl p-8 max-w-md w-full text-center animate-pop-in border-4 ${borderClass}`;
+            content.innerHTML = `
+                <i class="fas ${icon} text-7xl ${colorClass} mb-4"></i>
+                <h3 class="text-3xl font-black text-slate-800 mb-2">${htmlMsg}</h3>
+            `;
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 2800);
+        }
+
+        // --- 7. END GAME ---
+        
+        function endGame() {
+            playSound('win');
+            document.getElementById('game-ui').classList.add('hidden');
+            const goModal = document.getElementById('game-over-modal');
+            goModal.classList.remove('hidden');
+
+            document.getElementById('final-score-1').innerText = p1Score;
+            document.getElementById('final-score-2').innerText = p2Score;
+            
+            const p1Box = document.getElementById('result-p1');
+            const p2Box = document.getElementById('result-p2');
+            const winnerAnnounce = document.getElementById('winner-announcement');
+            
+            p1Box.classList.remove('scale-110', 'border-yellow-400');
+            p2Box.classList.remove('scale-110', 'border-yellow-400');
+
+            if(p1Score > p2Score) {
+                p1Box.classList.add('scale-110', 'border-yellow-400');
+                winnerAnnounce.innerHTML = "<i class='fas fa-trophy text-yellow-300'></i> PLAYER 1 MENANG!";
+                fireConfetti(0.25); // from left
+            } else if (p2Score > p1Score) {
+                p2Box.classList.add('scale-110', 'border-yellow-400');
+                winnerAnnounce.innerHTML = "<i class='fas fa-trophy text-yellow-300'></i> PLAYER 2 MENANG!";
+                fireConfetti(0.75); // from right
+            } else {
+                winnerAnnounce.innerHTML = "<i class='fas fa-handshake text-white'></i> HASIL SERI!";
+                fireConfetti(0.5); // from center
+            }
+        }
+
+        function fireConfetti(xPos) {
+            var duration = 3 * 1000;
+            var animationEnd = Date.now() + duration;
+            var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+
+            var interval = setInterval(function() {
+                var timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                    return clearInterval(interval);
+                }
+
+                var particleCount = 50 * (timeLeft / duration);
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: xPos, y: Math.random() - 0.2 } }));
+            }, 250);
+        }
+
+    </script>
+</body>
+</html>
